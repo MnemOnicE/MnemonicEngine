@@ -22,6 +22,9 @@ from src.core.tools.registry import ToolRegistry
 class SecurityError(Exception):
     pass
 
+class MaxStepsExceededError(Exception):
+    pass
+
 class GraphExecutor:
     """
     Traverses the Sovereign Execution Graph.
