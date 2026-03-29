@@ -26,7 +26,7 @@ class WorldState:
         self.day = 1
         self.time_of_day = "Morning"
         self.times = ["Morning", "Afternoon", "Evening", "Night"]
-        self.current_event = EVENTS[-1]
+        self.current_event = EVENTS[-1] if EVENTS else {"name": "Stillness", "desc": "The system is unnaturally quiet."}
         self.active_quests = []
 
     # Mapping your World_Heartbeat.md
