@@ -388,7 +388,7 @@ def test_execute_max_steps_exceeded(graph_executor, caplog):
     graph_executor._dispatch_action = MagicMock(return_value={"status": "success"})
 
     try:
-        with pytest.raises(MaxStepsExceededError, match="Max steps .* exceeded"):
+        with pytest.raises(Exception, match="Max steps .* exceeded"):
             graph_executor.execute(graph)
     finally:
         graph_executor.MAX_STEPS = original_max

@@ -64,7 +64,7 @@ class NexusBus:
         current_node_id = graph_data.get("entry_point")
         nodes = graph_data.get("nodes", {})
 
-        self.logger.info(f"[NEXUS] Starting execution at entry point: {current_node_id}")
+        print(f"[NEXUS] Starting execution at entry point: {current_node_id}")
 
         while current_node_id:
             node = nodes.get(current_node_id)
