@@ -1,0 +1,402 @@
+# Jules Code Team Template
+# Copyright (C) 2026  MnemOnicE
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+import pytest
+import jsonschema
+from unittest.mock import MagicMock
+from src.core.tools.graph_executor import GraphExecutor, SecurityError
+
+@pytest.fixture
+def graph_executor():
+    mock_bus = MagicMock()
+    return GraphExecutor(event_bus=mock_bus)
+
+def test_validate_integrity_no_shield(graph_executor):
+    """Test validation passes when intent_glyph does not contain shield."""
+    graph = {
+        "intent_glyph": "🧪",
+        "nodes": {"start": {"action": "run_tool"}}
+    }
+    # Should not raise exception
+    graph_executor.validate_integrity(graph)
+
+def test_dispatch_action_shizuku_active_injects_use_root(graph_executor):
+    """Test that use_root=True is injected when shizuku_active is True in context."""
+    node = {
+        "action": "run_tool",
+        "params": {
+            "tool": "test_tool",
+            "args": {"arg1": "val1"}
+        }
+    }
+    context = {"shizuku_active": True}
+
+    graph_executor.registry.invoke = MagicMock(return_value={"status": "success"})
+
+    graph_executor._dispatch_action(node, context)
+
+    graph_executor.registry.invoke.assert_called_once_with(
+        "test_tool",
+        arg1="val1",
+        use_root=True
+    )
+
+def test_dispatch_action_shizuku_inactive_no_injection(graph_executor):
+    """Test that use_root is NOT injected when shizuku_active is False or missing."""
+    node = {
+        "action": "run_tool",
+        "params": {
+            "tool": "test_tool",
+            "args": {"arg1": "val1"}
+        }
+    }
+
+    graph_executor.registry.invoke = MagicMock(return_value={"status": "success"})
+
+    # Case: False
+    graph_executor._dispatch_action(node, {"shizuku_active": False})
+    graph_executor.registry.invoke.assert_called_with("test_tool", arg1="val1")
+
+    # Case: Missing
+    graph_executor.registry.invoke.reset_mock()
+    graph_executor._dispatch_action(node, {})
+    graph_executor.registry.invoke.assert_called_with("test_tool", arg1="val1")
+
+def test_dispatch_action_preserves_existing_args(graph_executor):
+    """Test that existing arguments are preserved when shizuku_active is True."""
+    node = {
+        "action": "run_tool",
+        "params": {
+            "tool": "test_tool",
+            "args": {"other": "value"}
+        }
+    }
+    context = {"shizuku_active": True}
+    graph_executor.registry.invoke = MagicMock(return_value={"status": "success"})
+
+    graph_executor._dispatch_action(node, context)
+
+    graph_executor.registry.invoke.assert_called_once_with(
+        "test_tool",
+        other="value",
+        use_root=True
+    )
+
+def test_dispatch_action_shizuku_injection_side_effect_check(graph_executor):
+    """
+    Test documents that _dispatch_action currently modifies the input node's args.
+    If this behavior is unintended, it should be refactored to use a copy.
+    """
+    node = {
+        "action": "run_tool",
+        "params": {
+            "tool": "test_tool",
+            "args": {"arg1": "val1"}
+        }
+    }
+    context = {"shizuku_active": True}
+    graph_executor.registry.invoke = MagicMock(return_value={"status": "success"})
+
+    graph_executor._dispatch_action(node, context)
+
+    # Verify that the original node was modified
+    assert node["params"]["args"]["use_root"] is True
+
+
+def test_execute_exception_handling(graph_executor, caplog):
+    """Test that exceptions during node execution are caught and logged critically."""
+    graph = {
+        "intent_glyph": "🧪",
+        "entry_point": "node1",
+        "nodes": {
+            "node1": {
+                "action": "run_tool",
+                "next": "node2"
+            },
+            "node2": {
+                "action": "run_tool",
+                "next": "END"
+            }
+        }
+    }
+
+    # Mock _dispatch_action to raise an exception
+    graph_executor._dispatch_action = MagicMock(side_effect=RuntimeError("Simulated Crash"))
+
+    # Mock validate_integrity to avoid unnecessary checks
+    graph_executor.validate_integrity = MagicMock()
+
+    # Execute
+    graph_executor.execute(graph)
+
+    # Verify execution stopped after the first node (break)
+    assert graph_executor._dispatch_action.call_count == 1
+
+    # Verify the exception was logged as CRITICAL
+    critical_logs = [record for record in caplog.records if record.levelname == "CRITICAL"]
+    assert len(critical_logs) == 1
+    assert "Graph Crash: Simulated Crash" in critical_logs[0].message
+
+def test_execute_happy_path(graph_executor):
+    """Test the happy path of graph execution with multiple nodes."""
+    graph = {
+        "intent_glyph": "🧪",
+        "entry_point": "node1",
+        "nodes": {
+            "node1": {
+                "action": "run_tool",
+                "params": {"tool": "tool1"},
+                "next": "node2"
+            },
+            "node2": {
+                "action": "run_tool",
+                "params": {"tool": "tool2"},
+                "next": "END"
+            }
+        }
+    }
+
+    # Mock internal methods to isolate control flow
+    graph_executor.validate_integrity = MagicMock()
+    graph_executor._dispatch_action = MagicMock(return_value={"status": "success"})
+
+    # Execute
+    graph_executor.execute(graph)
+
+    # Verify control flow
+    graph_executor.bus.validate_graph.assert_called_once_with(graph)
+    graph_executor.validate_integrity.assert_called_once_with(graph)
+    assert graph_executor._dispatch_action.call_count == 2
+
+    # Verify calls to _dispatch_action were made with correct nodes
+    actual_nodes = [call.args[0] for call in graph_executor._dispatch_action.call_args_list]
+    assert actual_nodes == [graph["nodes"]["node1"], graph["nodes"]["node2"]]
+
+def test_execute_validation_failure(graph_executor):
+    """Test that execution stops if structural validation fails."""
+    graph = {"nodes": {}}
+
+    # Mock validation failure
+    graph_executor.bus.validate_graph.side_effect = jsonschema.ValidationError("Invalid graph")
+
+    # Execute should raise ValidationError
+    with pytest.raises(jsonschema.ValidationError):
+        graph_executor.execute(graph)
+
+def test_execute_missing_node(graph_executor, caplog):
+    """Test that execution handles missing nodes gracefully."""
+    graph = {
+        "intent_glyph": "🧪",
+        "entry_point": "node1",
+        "nodes": {
+            "node1": {
+                "action": "run_tool",
+                "next": "missing_node"
+            }
+        }
+    }
+
+    graph_executor.validate_integrity = MagicMock()
+    graph_executor._dispatch_action = MagicMock(return_value={"status": "success"})
+
+    with caplog.at_level("ERROR"):
+        graph_executor.execute(graph)
+
+    assert "Node missing_node not found." in caplog.text
+
+def test_execute_traversal_logic(graph_executor):
+    """Test that on_success takes precedence over next."""
+    graph = {
+        "intent_glyph": "🧪",
+        "entry_point": "node1",
+        "nodes": {
+            "node1": {
+                "action": "run_tool",
+                "on_success": "success_node",
+                "next": "next_node"
+            },
+            "success_node": {"action": "terminate"},
+            "next_node": {"action": "terminate"}
+        }
+    }
+
+    graph_executor.validate_integrity = MagicMock()
+    graph_executor._dispatch_action = MagicMock(return_value={"status": "success"})
+
+    graph_executor.execute(graph)
+
+    # Should visit node1 then success_node
+    actual_nodes = [call.args[0] for call in graph_executor._dispatch_action.call_args_list]
+    assert actual_nodes == [graph["nodes"]["node1"], graph["nodes"]["success_node"]]
+
+def test_execute_with_context_delta(graph_executor):
+    """Test that context_delta is correctly passed to the execution loop."""
+    context_delta = {"user_id": "123", "debug": True}
+    graph = {
+        "intent_glyph": "🧪",
+        "entry_point": "node1",
+        "context_delta": context_delta,
+        "nodes": {
+            "node1": {
+                "action": "run_tool",
+                "params": {"tool": "tool1"},
+                "next": "END"
+            }
+        }
+    }
+
+    graph_executor._dispatch_action = MagicMock(return_value={"status": "success"})
+
+    # Execute
+    graph_executor.execute(graph)
+
+    # Verify context_delta was passed to _dispatch_action
+    graph_executor._dispatch_action.assert_called_once_with(
+        graph["nodes"]["node1"],
+        context_delta
+    )
+
+def test_execute_happy_path_logging(graph_executor, caplog):
+    """Test that the execution of nodes is logged correctly."""
+    graph = {
+        "intent_glyph": "🧪",
+        "entry_point": "node1",
+        "nodes": {
+            "node1": {
+                "action": "test_action",
+                "next": "END"
+            }
+        }
+    }
+
+    graph_executor._dispatch_action = MagicMock(return_value={"status": "success"})
+
+    with caplog.at_level("INFO"):
+        graph_executor.execute(graph)
+
+    assert "Executing Node: node1 [test_action]" in caplog.text
+
+def test_validate_integrity_shield_with_scan(graph_executor):
+    """Test validation passes when intent_glyph contains shield and security_scan is present."""
+    graph = {
+        "intent_glyph": "🛡️",
+        "nodes": {
+            "scan": {"action": "security_scan"},
+            "start": {"action": "run_tool"}
+        }
+    }
+    # Should not raise exception
+    graph_executor.validate_integrity(graph)
+
+def test_validate_integrity_shield_missing_scan(graph_executor):
+    """Test validation raises SecurityError when shield is present but security_scan is missing."""
+    graph = {
+        "intent_glyph": "🛡️",
+        "nodes": {
+            "start": {"action": "run_tool"}
+        }
+    }
+    with pytest.raises(SecurityError, match="Graph deviates from Sentinel Intent! Halting."):
+        graph_executor.validate_integrity(graph)
+
+def test_validate_integrity_empty_glyph(graph_executor):
+    """Test validation passes when intent_glyph is empty."""
+    graph = {
+        "intent_glyph": "",
+        "nodes": {"start": {"action": "run_tool"}}
+    }
+    # Should not raise exception
+    graph_executor.validate_integrity(graph)
+
+def test_validate_integrity_missing_glyph_key(graph_executor):
+    """Test validation passes when intent_glyph key is missing (defaults to empty string)."""
+    graph = {
+        "nodes": {"start": {"action": "run_tool"}}
+    }
+    # Should not raise exception
+    graph_executor.validate_integrity(graph)
+
+def test_validate_integrity_none_glyph(graph_executor):
+    """Test validation handles explicit None for intent_glyph gracefully (treats as empty)."""
+    graph = {
+        "intent_glyph": None,
+        "nodes": {"start": {"action": "run_tool"}}
+    }
+    # Should not raise exception
+    graph_executor.validate_integrity(graph)
+
+def test_validate_integrity_loose_check(graph_executor):
+    """
+    Test documents the current loose validation behavior:
+    'security_scan' in a value (not action) satisfies the check.
+    """
+    graph = {
+        "intent_glyph": "🛡️",
+        "metadata": "security_scan",  # This triggers the check
+        "nodes": {"start": {"action": "run_tool"}}
+    }
+    # Should not raise exception due to str(graph) check
+    graph_executor.validate_integrity(graph)
+
+def test_validate_integrity_multiple_shields(graph_executor):
+    """Test validation handles multiple shields correctly."""
+    graph = {
+        "intent_glyph": "🛡️🛡️",
+        "nodes": {
+            "scan": {"action": "security_scan"},
+            "start": {"action": "run_tool"}
+        }
+    }
+    # Should not raise exception
+    graph_executor.validate_integrity(graph)
+
+def test_execute_max_steps_exceeded(graph_executor, caplog):
+    """Test that cyclic graphs are terminated when MAX_STEPS is exceeded."""
+    graph = {
+        "intent_glyph": "🧪",
+        "entry_point": "node1",
+        "nodes": {
+            "node1": {
+                "action": "test_action",
+                "next": "node2"
+            },
+            "node2": {
+                "action": "test_action",
+                "next": "node1"
+            }
+        }
+    }
+
+    # Temporarily set a small MAX_STEPS for the test
+    original_max = graph_executor.MAX_STEPS
+    graph_executor.MAX_STEPS = 5
+
+    graph_executor.validate_integrity = MagicMock()
+    graph_executor._dispatch_action = MagicMock(return_value={"status": "success"})
+
+    try:
+        graph_executor.execute(graph)
+    finally:
+        graph_executor.MAX_STEPS = original_max
+
+    # Verify it stopped at 5 + 1 steps (the check is step_count > MAX_STEPS)
+    # Actually it will execute node1, node2, node1, node2, node1.
+    # step_count will be 1, 2, 3, 4, 5.
+    # When step_count becomes 6, it hits the limit.
+    assert graph_executor._dispatch_action.call_count == 5
+
+    # Verify error was logged
+    assert f"Max steps (5) exceeded. Potential infinite loop." in caplog.text
