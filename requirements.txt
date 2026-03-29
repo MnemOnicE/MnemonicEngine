@@ -1,2 +1,4 @@
 gitingest
 jsonschema
+rich
+pyfiglet

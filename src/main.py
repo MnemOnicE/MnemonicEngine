@@ -30,6 +30,8 @@ except ImportError as e:
     print(f"Error importing modules: {e}")
     sys.exit(1)
 
+from src.game import start_game
+
 def generate_mock_graph(task_description):
     """
     Generates a static execution graph for demonstration.
@@ -79,7 +81,8 @@ def main():
     args = parser.parse_args()
 
     if not args.task and not args.file:
-        parser.print_help()
+        # Default behavior: run the game
+        start_game()
         sys.exit(0)
 
     task = args.task or f"Process file: {args.file}"
