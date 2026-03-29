@@ -17,7 +17,7 @@ This file serves as the high-level system prompt. for granular, tool-specific co
 No task is complete until:
 1.  **Context is Updated**: `AI_MEMORY.md` records new learnings.
 2.  **Drift is Checked**: Changes align with `Project_Plan.md`.
-3.  **Verification Passes**: All property-based tests in `tests/verification/` pass.
+3.  **Verification Passes**: All automated tests pass.
 4.  **Architecture is Valid**: No "God Objects" introduced; diagrams updated.
 5.  **Security is Enforced**: No secrets in commits; OIDC identity used.
 
