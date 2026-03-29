@@ -3,3 +3,11 @@ __pycache__/
 node_modules/
 template_source/node_modules/
 .hypothesis/
+
+
+# --- JULES CODING SQUAD ---
+node_modules/
+dist/
+coverage/
+.hypothesis/
+docs/diagrams/

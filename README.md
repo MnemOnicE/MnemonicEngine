@@ -112,3 +112,7 @@ We welcome "Vibe Coders" and prompt engineers! Please read [CONTRIBUTING.md](htt
 ## 📄 License
 
 This project is licensed under the [GNU Affero General Public License v3.0](LICENSE).
+
+
+> 🧠 **This project is now managed by The Coding Squad.**
+> See `.agents/docs/USER_MANUAL.md` for commands.

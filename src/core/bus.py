@@ -58,3 +58,30 @@ class NexusBus:
             self.logger.error("[VALIDATION ERROR] Graph validation failed", exc_info=True)
             raise e
 
+
+    def execute(self, graph_data):
+        self.validate_graph(graph_data)
+        current_node_id = graph_data.get("entry_point")
+        nodes = graph_data.get("nodes", {})
+
+        print(f"[NEXUS] Starting execution at entry point: {current_node_id}")
+
+        while current_node_id:
+            node = nodes.get(current_node_id)
+            if not node:
+                print(f"[ERROR] Node '{current_node_id}' not found in graph.")
+                break
+
+            action = node.get("action")
+            print(f"[EXECUTING] Node {current_node_id}: {action}")
+
+            if action == "terminate":
+                print("[NEXUS] Terminate action reached. Stopping.")
+                break
+
+            next_node = node.get("next") or node.get("on_success")
+            if not next_node:
+                print(f"[NEXUS] No next node defined for {current_node_id}. Stopping.")
+                break
+
+            current_node_id = next_node

@@ -1,22 +1,27 @@
-## 📚 Repository Context
+# AGENTS.md: The Agent Manifesto
 
-This repository uses an automated ingestion system to maintain a snapshot of the codebase history.
-Agents should check the `ingests/` directory for the latest codebase digest file (e.g., `digest_YYYYMMDD_HHMMSS.txt`).
-Reading this file provides a comprehensive understanding of the project's state, structure, and content at that point in time.
+## 1. Intent & Purpose
+This repository is an **Agentic GitHub Template** designed to operate as a high-assurance, zero-trust engineering environment. It is not just code; it is a **Governance Protocol**.
 
-The ingestion process is managed by `template_source/scripts/smart_ingest.py`, which is designed to run every 5 commits (or when the directory is empty), keeping only the latest 3 snapshots. It can also be forced via the `--force` flag for manual or emergency updates.
+As an autonomous agent (Brain, Boom, Sentinel, etc.), your primary directive is to facilitate **Vibe Coding** while strictly adhering to **Architectural Integrity** and **Security Hygiene**.
 
-## 🛠️ System Architecture
+## 2. The Rulebook
+This file serves as the high-level system prompt. for granular, tool-specific configurations, coding standards, and linter rules, strictly adhere to the definitions found in:
+**`./.agents/`**
 
-The core runtime environment is located in `src/`, designed to be the "Active Core" of the agent instance.
+*   **`.agents/config/`**: Agent persona definitions.
+*   **`.agents/rules/`**: Specific coding rules and workflow constraints.
+*   **`.agents/memory/`**: Shared team memory and session logs.
 
-### Key Components
-- **`src/main.py`**: The CLI entry point. Initializes the `NexusBus` and `GraphExecutor`.
-- **`src/core/bus.py`**: The **Nexus Bus**. Handles event dispatching and validates execution graphs against `src/core/schema/execution_graph.json`.
-- **`src/core/tools/graph_executor.py`**: The **Graph Executor**. Traverses the graph, executes nodes, and manages the retry/repair loop.
-- **`src/core/context.py`**: The **Context Loader**. Loads agent personas (`.agents/config/defaults/*.md`) and the tech stack (`TECH_STACK.md`).
-- **`src/core/tools/registry.py`**: The **Tool Registry**. Maps string identifiers in the graph to Python functions.
+## 3. Definition of Done
+No task is complete until:
+1.  **Context is Updated**: `AI_MEMORY.md` records new learnings.
+2.  **Drift is Checked**: Changes align with `Project_Plan.md`.
+3.  **Verification Passes**: All property-based tests in `tests/verification/` pass.
+4.  **Architecture is Valid**: No "God Objects" introduced; diagrams updated.
+5.  **Security is Enforced**: No secrets in commits; OIDC identity used.
 
-## ⚠️ Known Issues
-
-Please refer to `BUGS.md` for a current list of known code health issues and architectural discrepancies.
+## 4. Operational Protocols
+*   **Context First**: Before writing code, read `/.context/` to understand the domain.
+*   **Plan Then Act**: Update `Project_Plan.md` or design docs before implementation.
+*   **Evidence Over Hallucination**: Use the "Proof" tools (Hypothesis, Formal Specs) to verify logic.
